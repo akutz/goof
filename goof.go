@@ -179,94 +179,180 @@ regarding the context of the error and that may be helpful to debugging.
 package goof
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
+// InnerErrorKey is the key used to store inner errors in Goof errors.
+var InnerErrorKey = "inner"
+
 // Error is a structure that implements the Go Error interface as well as the
 // Golf interface for extended log information capabilities.
-type Error struct {
-	msg  string
-	data map[string]interface{}
+type Error interface {
+	error
+
+	// golfer enables the Goof error for the Golf package at
+	// https://github.com/akutz/golf.
+	golfer
+
+	// logrusAware enables the Goof error to be logged correctly by logrus at
+	// https://github.com/akutz/logrus/tree/feature/logrus-aware-types.
+	logrusAware
+
+	// fmt.Stringer guarantees the Error will have a String function
+	fmt.Stringer
+
+	// json.Marshaller indicates that this type controls how it is marshalled to
+	// JSON using the encoding/json package.
+	json.Marshaler
+
+	// Fields returns the error's structured field data.
+	Fields() map[string]interface{}
+
+	// IncludeMessageInJSON sets a flag indicating whether or not to include
+	// the error message when serializing a Goof.Error to JSON.
+	IncludeMessageInJSON(enable bool)
+}
+
+// Goof is a goof error.
+type Goof struct {
+	msg              string
+	data             map[string]interface{}
+	includeMsgInJSON bool
+}
+
+// logrusAware enables the Goof error to be logged correctly by logrus at
+// https://github.com/akutz/logrus/tree/feature/logrus-aware-types.
+type logrusAware interface {
+	GetLogMessage() string
+	GetLogData() map[string]interface{}
+}
+
+// golfer enables the Goof error for the Golf package at
+// https://github.com/akutz/golf.
+type golfer interface {
+	PlayGolf() bool
+	GolfExportedFields() map[string]interface{}
 }
 
 // Fields is a type alias for a map of interfaces.
 type Fields map[string]interface{}
 
 // Error returns the error message.
-func (e *Error) Error() string {
+func (e *Goof) Error() string {
 	return e.msg
 }
 
+// Fields returns the error's structured, field data.
+func (e *Goof) Fields() map[string]interface{} {
+	return e.data
+}
+
 // String returns a stringified version of the error.
-func (e *Error) String() string {
+func (e *Goof) String() string {
 	return e.msg
 }
 
 // PlayGolf lets the logrus framework know that Error supports the Golf
 // framework.
-func (e *Error) PlayGolf() bool {
+func (e *Goof) PlayGolf() bool {
 	return true
 }
 
 // GolfExportedFields returns the fields to use when playing golf.
-func (e *Error) GolfExportedFields() map[string]interface{} {
+func (e *Goof) GolfExportedFields() map[string]interface{} {
 	return e.data
 }
 
 // GetLogMessage gets the message used for logging for this object.
-func (e *Error) GetLogMessage() string {
+func (e *Goof) GetLogMessage() string {
 	return e.msg
 }
 
 // GetLogData gets the message used for logging for this object.
-func (e *Error) GetLogData() map[string]interface{} {
+func (e *Goof) GetLogData() map[string]interface{} {
 	return e.data
+}
+
+// MarshalJSON marshals this object to JSON for the encoding/json package.
+func (e *Goof) MarshalJSON() ([]byte, error) {
+
+	var m map[string]interface{}
+
+	if e.includeMsgInJSON {
+		m = map[string]interface{}{
+			"error":  e.Error(),
+			"fields": e.Fields(),
+		}
+	} else {
+		m = e.Fields()
+	}
+
+	return json.Marshal(m)
+}
+
+// IncludeMessageInJSON sets a flag indicating whether or not to include
+// the error message when serializing a Goof.Error to JSON.
+func (e *Goof) IncludeMessageInJSON(enable bool) {
+	e.includeMsgInJSON = enable
 }
 
 // New returns a new error object initialized with the provided message.
 func New(message string) error {
-	return &Error{msg: message, data: Fields{}}
+	return WithError(message, nil)
 }
 
 // Newf returns a new error object initialized with the messages created by
 // formatting the format string with the provided arguments.
 func Newf(format string, a ...interface{}) error {
-	return &Error{msg: fmt.Sprintf(format, a), data: Fields{}}
+	return WithError(fmt.Sprintf(format, a), nil)
 }
 
 // WithError returns a new error object initialized with the provided message
 // and inner error.
-func WithError(message string, inner error) error {
+func WithError(message string, inner error) *Goof {
 	return WithFieldsE(nil, message, inner)
 }
 
 // WithField returns a new error object initialized with the provided field
 // name, value, and error message.
-func WithField(key string, val interface{}, message string) error {
+func WithField(key string, val interface{}, message string) *Goof {
 	return WithFields(Fields{key: val}, message)
 }
 
 // WithFieldE returns a new error object initialized with the provided field
 // name, value, error message, and inner error.
-func WithFieldE(key string, val interface{}, message string, inner error) error {
+func WithFieldE(key string, val interface{}, message string, inner error) *Goof {
 	return WithFieldsE(Fields{key: val}, message, inner)
 }
 
 // WithFields returns a new error object initialized with the provided fields
 // and error message.
-func WithFields(fields map[string]interface{}, message string) error {
+func WithFields(fields map[string]interface{}, message string) *Goof {
 	return WithFieldsE(fields, message, nil)
 }
 
 // WithFieldsE returns a new error object initialized with the provided fields,
 // error message, and inner error.
 func WithFieldsE(
-	fields map[string]interface{}, message string, inner error) error {
+	fields map[string]interface{}, message string, inner error) *Goof {
+
 	if fields == nil {
 		fields = Fields{}
 	}
 	if inner != nil {
-		fields["inner"] = inner
+		fields[InnerErrorKey] = inner
 	}
-	return &Error{msg: message, data: fields}
+
+	return &Goof{
+		msg:              message,
+		data:             fields,
+		includeMsgInJSON: false,
+	}
+}
+
+// newError is not meant to be called by anyone, it's just here to assert that
+// the Goof struct adheres to the Error interface.
+func newError() Error {
+	return &Goof{}
 }

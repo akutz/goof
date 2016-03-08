@@ -1,8 +1,9 @@
 language: go
 go:
-  - 1.5
+  - 1.6
 before_install:
   - go get github.com/Masterminds/glide
   - glide up
 script:
-  - go install $(glide nv)
+  - go install
+  - go test -v
