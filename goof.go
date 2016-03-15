@@ -277,6 +277,10 @@ func (e *Goof) GetLogData() map[string]interface{} {
 // MarshalJSON marshals this object to JSON for the encoding/json package.
 func (e *Goof) MarshalJSON() ([]byte, error) {
 
+	if len(e.Fields()) == 0 {
+		return json.Marshal(e.Error())
+	}
+
 	var m map[string]interface{}
 
 	if e.includeMsgInJSON {
