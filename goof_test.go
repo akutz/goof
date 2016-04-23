@@ -38,7 +38,7 @@ func TestString(t *testing.T) {
 	assertMsgAndString(t, e, false, false, true)
 }
 
-func assertMsgAndString(t *testing.T, e Error, incErr, incFmt, incStr bool) {
+func assertMsgAndString(t *testing.T, e Goof, incErr, incFmt, incStr bool) {
 	e.IncludeFieldsInError(incErr)
 	e.IncludeFieldsInFormat(incFmt)
 	e.IncludeFieldsInString(incStr)
