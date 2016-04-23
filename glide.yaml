@@ -3,6 +3,5 @@ import:
   - package: github.com/Sirupsen/logrus
     ref:     feature/logrus-aware-types
     repo:    https://github.com/akutz/logrus
-    vcs:     git
   - package: gopkg.in/gemnasium/logrus-airbrake-hook.v2
-    vcs:     git
+  - package: github.com/stretchr/testify
