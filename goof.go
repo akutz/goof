@@ -211,9 +211,9 @@ var (
 	InnerErrorKey = "inner"
 )
 
-// Error is Goof error and implements the Go Error interface as well as the
+// Goof is an error and implements the Go Error interface as well as the
 // Golf interface for extended log information capabilities.
-type Error interface {
+type Goof interface {
 	error
 
 	// golfer enables the Goof error for the Golf package at
@@ -427,44 +427,44 @@ func (e *goof) IncludeFieldsInString(enable bool) {
 }
 
 // New returns a new error object initialized with the provided message.
-func New(message string) Error {
+func New(message string) Goof {
 	return WithError(message, nil)
 }
 
 // Newf returns a new error object initialized with the messages created by
 // formatting the format string with the provided arguments.
-func Newf(format string, a ...interface{}) Error {
+func Newf(format string, a ...interface{}) Goof {
 	return WithError(fmt.Sprintf(format, a), nil)
 }
 
 // WithError returns a new error object initialized with the provided message
 // and inner error.
-func WithError(message string, inner error) Error {
+func WithError(message string, inner error) Goof {
 	return WithFieldsE(nil, message, inner)
 }
 
 // WithField returns a new error object initialized with the provided field
 // name, value, and error message.
-func WithField(key string, val interface{}, message string) Error {
+func WithField(key string, val interface{}, message string) Goof {
 	return WithFields(Fields{key: val}, message)
 }
 
 // WithFieldE returns a new error object initialized with the provided field
 // name, value, error message, and inner error.
-func WithFieldE(key string, val interface{}, message string, inner error) Error {
+func WithFieldE(key string, val interface{}, message string, inner error) Goof {
 	return WithFieldsE(Fields{key: val}, message, inner)
 }
 
 // WithFields returns a new error object initialized with the provided fields
 // and error message.
-func WithFields(fields map[string]interface{}, message string) Error {
+func WithFields(fields map[string]interface{}, message string) Goof {
 	return WithFieldsE(fields, message, nil)
 }
 
 // WithFieldsE returns a new error object initialized with the provided fields,
 // error message, and inner error.
 func WithFieldsE(
-	fields map[string]interface{}, message string, inner error) Error {
+	fields map[string]interface{}, message string, inner error) Goof {
 
 	if fields == nil {
 		fields = Fields{}
