@@ -182,7 +182,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -211,6 +210,16 @@ var (
 
 	// InnerErrorKey is the key used to store inner errors in Goof errors.
 	InnerErrorKey = "inner"
+
+	// ValidateInnerErrorJSON can be an expensive operation, so it's usually
+	// best handled externally. Since errors created with errors.New or
+	// fmt.Errorf do not have any exported fields, if they are used as inner
+	// errors their messages are dropped. This flag will enable a feature
+	// so that when an inner error is provided to one of the Goof package's
+	// error construction methods, the inner error is marshaled to JSON. If
+	// the result is a zero-length buffer then the error is wrapped in a Goof
+	// error to ensure that its message is not lost.
+	ValidateInnerErrorJSON bool
 )
 
 // Goof is an error and implements the Go Error interface as well as the
@@ -357,7 +366,7 @@ func (e *goof) MarshalJSON() ([]byte, error) {
 
 	m := e.Fields()
 
-	if e.includeMsgInJSON {
+	if e.includeMsgInJSON && e.msg != "" {
 		m["msg"] = e.msg
 	}
 
@@ -460,10 +469,40 @@ func WithFields(fields map[string]interface{}, message string) Goof {
 	return WithFieldsE(fields, message, nil)
 }
 
+func isEmptyJSON(buf []byte) bool {
+	if len(buf) < 2 {
+		return true
+	}
+	return buf[0] == '{' && buf[1] == '}'
+}
+
 // WithFieldsE returns a new error object initialized with the provided fields,
 // error message, and inner error.
 func WithFieldsE(
 	fields map[string]interface{}, message string, inner error) Goof {
+	return withFieldsE(fields, message, inner)
+}
+
+func validateMarshaledJSON(err error) error {
+	if !ValidateInnerErrorJSON {
+		return err
+	}
+
+	switch tErr := err.(type) {
+	case nil, Goof:
+		return tErr
+	default:
+		if buf, _ := json.Marshal(tErr); isEmptyJSON(buf) {
+			return New(tErr.Error())
+		}
+		return tErr
+	}
+}
+
+func withFieldsE(
+	fields map[string]interface{}, message string, inner error) *goof {
+
+	inner = validateMarshaledJSON(inner)
 
 	if fields == nil {
 		fields = Fields{}
@@ -472,9 +511,13 @@ func WithFieldsE(
 		fields[InnerErrorKey] = inner
 	}
 
+	return newGoof(message, fields)
+}
+
+func newGoof(msg string, data Fields) *goof {
 	return &goof{
-		msg:                   message,
-		data:                  fields,
+		msg:                   msg,
+		data:                  data,
 		includeMsgInJSON:      IncludeMessageInJSON,
 		includeFieldsInError:  IncludeFieldsInError,
 		includeFieldsInFormat: IncludeFieldsInFormat,
@@ -482,32 +525,29 @@ func WithFieldsE(
 	}
 }
 
-// UnmarshalJSON returns a new error object by unmarshalling the contents of
-// the buffer.
-func UnmarshalJSON(data []byte) (Goof, error) {
-	return Decode(bytes.NewReader(data))
+// UnmarshalJSON unmarshals JSON data to a Goof error.
+func (e *goof) UnmarshalJSON(data []byte) error {
+
+	umd := map[string]interface{}{}
+	if err := json.Unmarshal(data, &umd); err != nil {
+		return err
+	}
+
+	uge, err := unmarshalMap(umd)
+	if err != nil {
+		return err
+	}
+
+	e.msg = uge.msg
+	e.data = uge.data
+
+	return nil
 }
 
-// Decode returns a new error object by decoding the contents of the reader.
-func Decode(r io.Reader) (Goof, error) {
-	d := json.NewDecoder(r)
-	data := map[string]interface{}{}
-	if err := d.Decode(&data); err != nil {
-		return nil, err
-	}
-	return UnmarshalMap(data)
-}
-
-// UnmarshalMap returns a new error object by unmarshalling the contents of
-// the map.
-func UnmarshalMap(data map[string]interface{}) (Goof, error) {
-
-	if len(data) == 0 {
-		return nil, io.EOF
-	}
+func unmarshalMap(data map[string]interface{}) (*goof, error) {
 
 	var (
-		g                = &goof{data: data}
+		g                = newGoof("", data)
 		msgKey, innerKey string
 		msgObj, innerObj interface{}
 	)
@@ -533,19 +573,18 @@ func UnmarshalMap(data map[string]interface{}) (Goof, error) {
 	if innerKey != "" {
 		delete(data, innerKey)
 		switch inner := innerObj.(type) {
-		case string:
-			data[InnerErrorKey] = New(inner)
 		case map[string]interface{}:
-			ig, err := UnmarshalMap(inner)
+			ig, err := unmarshalMap(inner)
 			if err != nil {
 				return nil, err
 			}
 			data[InnerErrorKey] = ig
+		case string:
+			data[InnerErrorKey] = New(inner)
 		default:
 			data[InnerErrorKey] = Newf("%v", inner)
 		}
 	}
 
-	fmt.Printf("goof=%v\n", g)
 	return g, nil
 }

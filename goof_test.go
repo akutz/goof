@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -94,28 +93,53 @@ func TestMarshalIndentToJSONWithMessage(t *testing.T) {
 	t.Log(string(buf))
 }
 
-func TestDecode(t *testing.T) {
-	decErr, err := UnmarshalJSON(jsonError)
-	assert.NoError(t, err)
-	assert.Error(t, decErr)
+func newHTTPError() HTTPError {
+	goofErr := WithFieldE(
+		"fu", 3, "fubar",
+		WithError(
+			"dagnabbit", fmt.Errorf("broken"),
+		),
+	)
+	return NewHTTPError(goofErr, 404)
+}
 
-	log.Error(WithError("this failed", New("because of this")))
-	log.Error(decErr)
-	t.Logf("%v", decErr)
-	decErr.IncludeMessageInJSON(true)
-	buf, err := decErr.MarshalJSON()
+func TestNewHTTPError(t *testing.T) {
+	ValidateInnerErrorJSON = true
+	httpErr := newHTTPError()
+	buf, err := json.MarshalIndent(httpErr, "", "  ")
 	assert.NoError(t, err)
 	t.Log(string(buf))
 }
 
-var jsonError = []byte(`{
+func TestDecode(t *testing.T) {
+	ValidateInnerErrorJSON = true
+	expectedHTTPErr := newHTTPError()
+	expectedBuf, err := json.MarshalIndent(expectedHTTPErr, "", "  ")
+	assert.NoError(t, err)
+
+	actualHTTPErr := &httpError{}
+	err = actualHTTPErr.UnmarshalJSON(expectedBuf)
+	assert.NoError(t, err)
+
+	actualBuf, err := json.MarshalIndent(actualHTTPErr, "", "  ")
+	assert.NoError(t, err)
+
+	actualStr := string(actualBuf)
+	expectedStr := string(expectedBuf)
+
+	assert.EqualValues(t, expectedStr, actualStr)
+	t.Log(expectedStr)
+	t.Log(actualStr)
+}
+
+var httpErrorValue = []byte(`{
+    "message": "fubar",
+    "status": 404,
     "error": {
+        "fu": 3,
         "inner": {
-            "inner": "bzzzzT! BROKEN",
-            "size": 10240
-        },
-        "iops": 1000
-    },
-    "message": "IOPS required",
-    "status": 500
+            "inner": "broken",
+            "msg": "dagnabbit"
+        }
+    }
 }`)
