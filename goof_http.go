@@ -133,9 +133,9 @@ func UnmarshalHTTPError(data []byte) (HTTPError, error) {
 // the reader.
 func DecodeHTTPError(r io.Reader) (HTTPError, error) {
 	d := json.NewDecoder(r)
-	goofErr := &goof{}
-	if err := d.Decode(goofErr); err != nil {
+	e := &httpError{}
+	if err := d.Decode(e); err != nil {
 		return nil, err
 	}
-	return &httpError{goofErr}, nil
+	return e, nil
 }
