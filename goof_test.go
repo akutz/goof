@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -92,3 +93,29 @@ func TestMarshalIndentToJSONWithMessage(t *testing.T) {
 	assert.NoError(t, err)
 	t.Log(string(buf))
 }
+
+func TestDecode(t *testing.T) {
+	decErr, err := UnmarshalJSON(jsonError)
+	assert.NoError(t, err)
+	assert.Error(t, decErr)
+
+	log.Error(WithError("this failed", New("because of this")))
+	log.Error(decErr)
+	t.Logf("%v", decErr)
+	decErr.IncludeMessageInJSON(true)
+	buf, err := decErr.MarshalJSON()
+	assert.NoError(t, err)
+	t.Log(string(buf))
+}
+
+var jsonError = []byte(`{
+    "error": {
+        "inner": {
+            "inner": "bzzzzT! BROKEN",
+            "size": 10240
+        },
+        "iops": 1000
+    },
+    "message": "IOPS required",
+    "status": 500
+}`)
