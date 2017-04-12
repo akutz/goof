@@ -445,6 +445,36 @@ func Newf(format string, a ...interface{}) Goof {
 	return WithError(fmt.Sprintf(format, a), nil)
 }
 
+// Newe returns the provided error object wrapped as a Goof error and recurses
+// into any possible, inner errors and ensures they too are Goof errors.
+func Newe(err error) Goof {
+
+	// check to see if the provided error is already a Goof
+	gerr, ok := err.(Goof)
+
+	// if the provided error is not a Goof we need to
+	// wrap it as a Goof by creating a new Goof
+	// instance using the provided error's message
+	if !ok {
+		return New(err.Error())
+	}
+
+	// check to see if there is an inner error
+	ierr, ok := gerr.Fields()["inner"].(error)
+	if !ok {
+		return gerr
+	}
+
+	// recurse with the inner error
+	gerr.Fields()["inner"] = Newe(ierr)
+	return gerr
+}
+
+// Inner is an alias for Newe.
+func Inner(err error) Goof {
+	return Newe(err)
+}
+
 // WithError returns a new error object initialized with the provided message
 // and inner error.
 func WithError(message string, inner error) Goof {

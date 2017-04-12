@@ -2,11 +2,46 @@ package goof
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestNewe(t *testing.T) {
+	g1 := WithError("g1", New("g2"))
+	buf, _ := json.Marshal(g1)
+	if !assert.Equal(t, `{"inner":"g2","msg":"g1"}`, string(buf)) {
+		t.FailNow()
+	}
+
+	g1 = WithError("g1", errors.New("g2"))
+	buf, _ = json.Marshal(g1)
+	if !assert.Equal(t, `{"inner":{},"msg":"g1"}`, string(buf)) {
+		t.FailNow()
+	}
+
+	g1 = Newe(g1)
+	buf, _ = json.Marshal(g1)
+	if !assert.Equal(t, `{"inner":"g2","msg":"g1"}`, string(buf)) {
+		t.FailNow()
+	}
+
+	g1 = WithError("g1", WithError("g2", errors.New("g3")))
+	buf, _ = json.Marshal(g1)
+	if !assert.Equal(
+		t, `{"inner":{"inner":{},"msg":"g2"},"msg":"g1"}`, string(buf)) {
+		t.FailNow()
+	}
+
+	g1 = Newe(g1)
+	buf, _ = json.Marshal(g1)
+	if !assert.Equal(
+		t, `{"inner":{"inner":"g3","msg":"g2"},"msg":"g1"}`, string(buf)) {
+		t.FailNow()
+	}
+}
 
 func TestFormat(t *testing.T) {
 	e := WithField("hello", "world", "introduction error")
